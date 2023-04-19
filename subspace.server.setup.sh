@@ -1,32 +1,51 @@
 #!/bin/bash
 
-# Install required packages
-apt update
-apt install -y pip curl htop file build-essential nginx jq certbot python3-certbot-nginx ufw vim git netcat cron unzip atop lshw cifs-utils lsof libusb-1.0-0/focal pkg-config gnupg unzstd tmux aria2 reiserfsprogs lz4 sysstat
+# Update the package list and upgrade packages
+apt update && apt upgrade -y
 
-# Configure SSH
-sudo sed -i 's/PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
-sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
-sudo systemctl restart ssh
+# Install essential packages
+apt install -y curl htop file fail2ban build-essential nginx jq certbot python3-certbot-nginx ufw vim git netcat cron unzip atop lshw cifs-utils lsof gnupg unzstd tmux aria2 reiserfsprogs lz4 sysstat ntp
 
-# Install fail2ban
-sudo apt install fail2ban -y
-sudo systemctl enable fail2ban
-sudo systemctl start fail2ban
+# Set timezone to UTC
+timedatectl set-timezone UTC
 
-# Add new user
-sudo adduser subspaceadmin
+# Add subspaceadmin user and add to sudo group
+adduser subspaceadmin
+usermod -aG sudo subspaceadmin
 
-# Add user to sudo group
-sudo usermod -aG sudo subspaceadmin
+# Enable automatic updates
+apt install -y unattended-upgrades
+dpkg-reconfigure -plow unattended-upgrades
 
-# Allow incoming traffic on ports 30333 and 30433
+# Download and install subspace-cli
+cd /root/.config
+mkdir subspace-cli
+cd subspace-cli
+wget https://github.com/subspace/community-node/releases/download/v0.3.1-alpha/subspace-cli-ubuntu-x86_64-v3-v0.3.1-alpha
+sudo chmod +x subspace-cli-ubuntu-x86_64-v3-v0.3.1-alpha
+
+# Start subspace-cli server
+./subspace-cli farm > /dev/null 2>&1 &
+
+# Allow ports 30333 and 30433
 sudo ufw allow 30333/tcp
 sudo ufw allow 30433/tcp
 
-# Enable automatic system updates
-sudo apt install unattended-upgrades -y
-sudo dpkg-reconfigure -plow unattended-upgrades
+# Configure sshd_config file
+sudo sed -i 's/PermitRootLogin yes/PermitRootLogin no/g' /etc/ssh/sshd_config
+sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/g' /etc/ssh/sshd_config
 
-# Download Subspace CLI binary
-wget https://github.com/subspace/subspace-cli/releases/download/v0.3.1-alpha/subspace-cli-ubuntu-x86_64-v3-v0.3.1-alpha
+# Restart ssh service
+sudo systemctl restart ssh
+
+# Configure fail2ban
+sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+sudo systemctl enable fail2ban
+sudo systemctl start fail2ban
+
+# Automatic system updates
+sudo systemctl enable --now apt-daily{,-upgrade}.{timer,service}
+
+# Start ntp service
+sudo systemctl start ntp
+
